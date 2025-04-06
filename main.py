@@ -5,92 +5,50 @@ import time
 from collections import defaultdict
 
 from fingerprint_generator import FingerprintGenerator
+from redis_db import RedisDB
 
 fingerprint_database = defaultdict(list)
 audio_id_to_info = {}
 
 
-def add_fingerprints_to_db(fingerprints):
-    for hash_hex, anchor_time, audio_id in fingerprints:
-        fingerprint_database[hash_hex].append((anchor_time, audio_id))
-
-def register_audio(file_path, audio_info, fingerprint_generator):
+def register_audio(file_path, audio_info, fingerprint_generator, redis_db):
+    if redis_db.file_already_registered(file_path):
+        print(f"Audio file '{file_path}' is already registered.")
+        return
+    
     
     start_time = time.time()
     fingerprints, audio_id = fingerprint_generator.generate_fingerprints(file_path)
     if not fingerprints:
-        return None
+        return
 
-    add_fingerprints_to_db(fingerprints)
-
-    if audio_info is None:
-        audio_info = {"filename": os.path.basename(file_path), "path": file_path}
-    if "path" not in audio_info:
-        audio_info["path"] = file_path
-
-    audio_id_to_info[audio_id] = audio_info
+    redis_db.register_audio(file_path, audio_info, fingerprints, audio_id)
+    # Register in Redis; if the file is already registered, the method returns the existing audio_id
 
     end_time = time.time()
-    print(f"OK (ID: {audio_id}, {len(fingerprints)} fps, {end_time - start_time:.2f}s)")
-    return audio_id
+    print(f"Registered {file_path}. Took {end_time - start_time:.2f}s.")
 
-def find_match(query_file_path, fingerprint_generator):
-    """Processes a query audio file and attempts to find the best match in the database."""
-    print(f"\nQuerying with: {query_file_path}")
+def find_match(query_file_path, fingerprint_generator, redis_db):
+    """Processes a query audio file and attempts to find the best match using Redis."""
+    print(f"\nQuerying file: {query_file_path}")
     start_time = time.time()
 
-    # Generate fingerprints for the query audio (using audio_id=-1 for queries)
     query_fingerprints, _ = fingerprint_generator.generate_fingerprints(query_file_path, is_query=True)
     if not query_fingerprints:
         return None, "No fingerprints generated for query"
 
-    print(f"Query: Generated {len(query_fingerprints)} fingerprints.")
+    print(f"Generated {len(query_fingerprints)} fingerprints.")
 
-    potential_matches = defaultdict(list)
-    hashes_matched = 0
-
-    for query_hash, query_anchor_time, _ in query_fingerprints:
-        if query_hash in fingerprint_database:
-            hashes_matched += 1
-            for db_anchor_time, db_audio_id in fingerprint_database[query_hash]:
-                potential_matches[db_audio_id].append((db_anchor_time, query_anchor_time))
-
-    if not potential_matches:
-        return None, f"No matching hashes found in database. ({time.time() - start_time:.2f}s)"
-
-    print(f"Query: Found {hashes_matched} hash matches corresponding to {len(potential_matches)} potential audio files.")
-
-    match_scores = defaultdict(lambda: defaultdict(int))
-    final_scores = {}
-
-    for audio_id, time_pairs in potential_matches.items():
-        for db_time, query_time in time_pairs:
-            delta = db_time - query_time
-            match_scores[audio_id][delta] += 1
-
-        if match_scores[audio_id]:
-            best_delta = max(match_scores[audio_id], key=match_scores[audio_id].get)
-            final_scores[audio_id] = match_scores[audio_id][best_delta]
-        else:
-            final_scores[audio_id] = 0
-
-    if not final_scores:
-        return None, "Could not score any matches."
-
-    best_match_audio_id = max(final_scores, key=final_scores.get)
-    best_score = final_scores[best_match_audio_id]
-
+    best_match_audio_id, result_message = redis_db.find_match(query_fingerprints)
+    if best_match_audio_id is not None:
+        audio_info = redis_db.get_audio_info(best_match_audio_id)
+        if audio_info:
+            result_message += f"\n-- Match Info: {audio_info.get('filename', 'Unknown')}"
+            
     end_time = time.time()
-    match_info = audio_id_to_info.get(best_match_audio_id, {"filename": "Unknown"})
-    
-    print('Best 5 matches:')
-    for audio_id, score in sorted(final_scores.items(), key=lambda x: x[1], reverse=True)[:5]:
-        info = audio_id_to_info.get(audio_id, {"filename": "Unknown"})
-        print(f"  {info['filename']} ({score})")
-    
-    result_message = f"Best Match: {match_info.get('filename', 'N/A')} with score {best_score}. Search took {end_time - start_time:.2f}s"
-    
+    result_message += f" -- Search took {end_time - start_time:.2f}s"
     return best_match_audio_id, result_message
+
 
 def get_files(directory, extensions):
     """Recursively retrieves files in a directory matching the supported audio extensions."""
@@ -131,24 +89,28 @@ def main(args):
         target_f_max_delta=args.target_f_max_delta,
         hash_algorithm=hash_algorithm
     )
+    
+    redis_db = RedisDB()
+    # redis_db.clear_db()
 
     audio_files = get_files(args.data_dir, args.extensions)
     for audio_file in audio_files:
         register_audio(
             audio_file,
             audio_info={"path": audio_file, "filename": os.path.basename(audio_file)},
-            fingerprint_generator=fingerprint_generator
+            fingerprint_generator=fingerprint_generator,
+            redis_db=redis_db
         )
 
     print(f'Took {time.time() - total_start_time:.2f}s to process {len(audio_files)} audio files.')
-    print(f"Database contains fingerprints for {len(audio_id_to_info)} audio files.")
     
-    db_hash_count = len(fingerprint_database)
-    db_entry_count = sum(len(v) for v in fingerprint_database.values())
-    print(f"Database hash index size: {db_hash_count} unique hashes, {db_entry_count} total entries.")
+    
 
-    match_id, message = find_match(args.query_file, fingerprint_generator)
+    match_id, message = find_match(args.query_file, fingerprint_generator, redis_db)
     print(message)
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Audio fingerprinting and matching")
@@ -172,7 +134,7 @@ if __name__ == "__main__":
                         help="Hash algorithm to use for fingerprinting")
     parser.add_argument("--data-dir", default="data/",
                         help="Directory to scan recursively for audio files")
-    parser.add_argument("--query-file", default="data/fma/music-fma-0002.wav",
+    parser.add_argument("--query-file", default="data/fma/music-fma-0004.wav",
                         help="Query audio file path")
     parser.add_argument("--extensions", default=".wav,.mp3,.flac,.ogg,.m4a",
                         help="Comma-separated list of supported audio extensions")
