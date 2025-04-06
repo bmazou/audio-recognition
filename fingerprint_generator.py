@@ -85,8 +85,7 @@ class FingerprintGenerator:
                     hasher = self.hash_algorithm()
                     hasher.update(hash_input)
                     hash_hex = hasher.hexdigest()
-                    fingerprints.append((hash_hex, anchor_time, self.audio_id))
+                    fingerprints.append((hash_hex, anchor_time))
                     
-        
                     
         return fingerprints, self.audio_id
