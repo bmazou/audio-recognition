@@ -187,10 +187,10 @@ class SQLiteDB:
         # Find the audio_id with the highest score
         best_match_audio_id = max(final_scores, key=final_scores.get)
         best_score = final_scores[best_match_audio_id]
+        audio_name = self._get_audio_info(best_match_audio_id)['filename']
+        return best_match_audio_id, f"Best match: {audio_name}. Score: {best_score}."
 
-        return best_match_audio_id, f"Best Match Audio ID: {best_match_audio_id} with score {best_score}."
-
-    def get_audio_info(self, audio_id):
+    def _get_audio_info(self, audio_id):
         """Retrieves the audio file path and filename for a given audio_id."""
         self.cursor.execute('SELECT file_path, filename FROM audio_files WHERE audio_id = ?', (audio_id,))
         result = self.cursor.fetchone()
