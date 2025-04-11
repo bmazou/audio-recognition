@@ -16,30 +16,30 @@ class FingerprintGenerator:
         self.target_f_max_delta = target_f_max_delta    # Maximum frequency difference for fingerprint pairs (in frequency bins)
         self.hash_algorithm = hash_algorithm            # Hash algorithm for fingerprint generation 
 
-    def load_and_preprocess_audio(self, file_path):
+    def _load_and_preprocess_audio(self, file_path):
         """Loads an audio file, ensures it is mono, and resamples to the target sample rate"""
         try:
-            y, original_sr = librosa.load(file_path, sr=None, mono=False)
+            audio, original_sr = librosa.load(file_path, sr=None, mono=False)
             # Convert to mono if necessary.
-            if y.ndim > 1:
-                y = np.mean(y, axis=0)
+            if audio.ndim > 1:
+                audio = np.mean(audio, axis=0)
             
             # Resample if the original sample rate is different.
             if original_sr != self.sr:
-                y = librosa.resample(y, orig_sr=original_sr, target_sr=self.sr)
+                audio = librosa.resample(audio, orig_sr=original_sr, target_sr=self.sr)
 
-            return y
+            return audio
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
             return None
 
-    def calculate_spectrogram(self, y):
+    def _calculate_spectrogram(self, y):
         """Calculates the magnitude spectrogram using short-time Fourier transform (STFT)."""
         stft_result = librosa.stft(y, n_fft=self.n_fft, hop_length=self.hop_length)
         spectrogram = np.abs(stft_result)
         return spectrogram
 
-    def find_spectrogram_peaks(self, spectrogram):
+    def _find_spectrogram_peaks(self, spectrogram):
         """Uses a maximum filter to detect local peaks in the spectrogram."""
         data_max = maximum_filter(spectrogram, size=self.neighborhood_size, mode='constant', cval=0.0)
         peaks_mask = (spectrogram == data_max)
@@ -47,15 +47,41 @@ class FingerprintGenerator:
         peak_coords = np.argwhere(peaks_mask)
         return peak_coords  
 
-    def generate_fingerprints(self, file_path):
-        y = self.load_and_preprocess_audio(file_path)
+    def _cut_audio(self, audio, start_time, end_time):
+        """Cuts the audio to the specified time range. Returns original audio if no valid range is provided."""
+        if start_time is None or end_time is None:
+            return audio
+        
+        start_sample = int(start_time * self.sr)
+        end_sample = int(end_time * self.sr)
 
-        error_loading_file = y is None
-        if error_loading_file:
-            return None 
+        # Ensures the start and end times are valid
+        start_sample = max(0, start_sample)
+        end_sample = min(len(audio), end_sample)
+        
+        if start_sample >= end_sample:
+            print(f"Invalid time range: start {start_time}s, end {end_time}s")
+            return audio
+        
+        
+        original_duration = len(audio) / self.sr
+        cur_duration = len(audio[start_sample:end_sample]) / self.sr
+        print(f"Cutting audio. Original duration: {original_duration:.2f}s, New duration: {cur_duration:.2f}s")
+    
+        return audio[start_sample:end_sample]
+        
 
-        spectrogram = self.calculate_spectrogram(y)
-        peaks = self.find_spectrogram_peaks(spectrogram)
+
+    def generate_fingerprints(self, file_path, start_time=None, end_time=None):
+        audio = self._load_and_preprocess_audio(file_path)
+        audio = self._cut_audio(audio, start_time, end_time)
+        
+        if audio is None:
+            print(f"Error loading audio from {file_path}")
+            return None
+
+        spectrogram = self._calculate_spectrogram(audio)
+        peaks = self._find_spectrogram_peaks(spectrogram)
         if peaks.size == 0:
             print(f"No peaks found for {file_path}")
             return None 
