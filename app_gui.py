@@ -11,9 +11,9 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
                              QSpacerItem, QSplitter, QTextEdit, QVBoxLayout,
                              QWidget)
 
-import fingerprint_generator as fg
 import sqlite_db
 import utils
+from maxima_pairing_algorithm import MaximaPairingAlgorithm
 
 
 class RegistrationWorker(QThread):
@@ -31,7 +31,7 @@ class RegistrationWorker(QThread):
 
     def run(self):
         self.log_signal.emit("Starting registration...")
-        fingerprint_gen = fg.FingerprintGenerator(
+        fingerprint_generator = MaximaPairingAlgorithm(
             sr=self.params['sample_rate'],
             n_fft=self.params['n_fft'],
             hop_length=self.params['hop_length'],
@@ -64,7 +64,7 @@ class RegistrationWorker(QThread):
                 self.log_signal.emit(f"Skipping registration: '{os.path.basename(file)}' already registered.")
                 continue
             
-            fingerprints = fingerprint_gen.generate_fingerprints(file)
+            fingerprints = fingerprint_generator.generate_fingerprints(file)
             if not fingerprints:
                 self.log_signal.emit(f"Could not generate fingerprints for {file}. Skipping registration.")
                 continue
@@ -101,7 +101,7 @@ class MatchingWorker(QThread):
             self.finished_signal.emit()
             return
 
-        fingerprint_gen = fg.FingerprintGenerator(
+        fingerprint_generator = MaximaPairingAlgorithm(
             sr=self.params['sample_rate'],
             n_fft=self.params['n_fft'],
             hop_length=self.params['hop_length'],
@@ -115,7 +115,7 @@ class MatchingWorker(QThread):
 
         db = sqlite_db.SQLiteDB(db_path=self.db_path)
         start = time.time()
-        query_fingerprints = fingerprint_gen.generate_fingerprints(self.query_file, self.start_time, self.end_time)
+        query_fingerprints = fingerprint_generator.generate_fingerprints(self.query_file, self.start_time, self.end_time)
         if not query_fingerprints:
             self.log_signal.emit("No fingerprints generated for the query file.")
             db.close()

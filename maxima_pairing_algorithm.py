@@ -5,8 +5,8 @@ from scipy.ndimage import maximum_filter
 from fingerprint_algorithm import FingerprintAlgorithm
 
 
-class FingerprintGenerator(FingerprintAlgorithm):
-    ALGORITHM_NAME = ...
+class MaximaPairingAlgorithm(FingerprintAlgorithm):
+    ALGORITHM_NAME = "MaximaPairingAlgorithm"
     
     def __init__(self, sr, n_fft, hop_length, neighborhood_size, min_amplitude,
                  target_t_min, target_t_max, target_f_max_delta, hash_algorithm):
