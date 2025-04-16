@@ -11,20 +11,15 @@ Database Schema:
    - file_path TEXT UNIQUE NOT NULL
    - filename TEXT NOT NULL
 
-2. algorithms table:
-    - algorithm_id INTEGER PRIMARY KEY AUTOINCREMENT
-    - name TEXT UNIQUE NOT NULL
+2. Each fingerprint algorithm has its own table.
+2a. maxima_pairing_fingerprints table:
+    - hash_hex TEXT NOT NULL
+    - anchor_time INTEGER NOT NULL
+    - audio_id INTEGER NOT NULL
+    - FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id)
     
-3. fingerprints table:
-   - hash_hex TEXT NOT NULL
-   - anchor_time INTEGER NOT NULL
-   - audio_id INTEGER NOT NULL
-   - algorithm_id INTEGER NOT NULL
-   - FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id)
-   - FOREIGN KEY (algorithm_id) REFERENCES algorithms(algorithm_id)
-
 Indices:
-- On fingerprints(hash_hex) for faster lookup during matching
+- On maxima_pairing_fingerprints(hash_hex) for faster lookup during matching
 - On audio_files(file_path) for checking duplicates
 """
 
@@ -47,64 +42,37 @@ class SQLiteDB:
                 filename TEXT NOT NULL
             )
         ''')
+
+        # Create a separate fingerprints table for MaximaPairingAlgorithm.
         self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS algorithms (
-                algorithm_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            )
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS fingerprints (
+            CREATE TABLE IF NOT EXISTS maxima_pairing_fingerprints (
                 hash_hex TEXT NOT NULL,
                 anchor_time INTEGER NOT NULL,
                 audio_id INTEGER NOT NULL,
-                algorithm_id INTEGER NOT NULL,
-                FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id) ON DELETE CASCADE,
-                FOREIGN KEY (algorithm_id) REFERENCES algorithms(algorithm_id) ON DELETE CASCADE
+                FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id) ON DELETE CASCADE
             )
         ''')
-        
-        # Index for faster hash lookups by algorithm during matching
         self.cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_fingerprints_hash_algo
-            ON fingerprints (hash_hex, algorithm_id)
+            CREATE INDEX IF NOT EXISTS idx_maxima_pairing_hash
+            ON maxima_pairing_fingerprints (hash_hex)
         ''')
-        
         self.cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_audio_files_path
             ON audio_files (file_path)
-        ''')  # SQLite should automatically create index due to UNIQUE constraint, but just to be sure (and to be explicit)
+        ''')
         self.conn.commit()
 
     def _clear_db(self):
-        """Removes all data from the database by dropping and recreating tables."""
+        """Removes all data from the database by dropping tables."""
         print(f"Clearing database '{self.db_path}'...")
-        self.cursor.execute('DROP TABLE IF EXISTS fingerprints')
-        self.cursor.execute('DROP TABLE IF EXISTS algorithms')
+        self.cursor.execute('DROP TABLE IF EXISTS maxima_pairing_fingerprints')
         self.cursor.execute('DROP TABLE IF EXISTS audio_files')
         self.conn.commit()
         self._create_tables() 
         print("Database cleared and schema recreated.")
-        
         self.cursor.execute('SELECT COUNT(*) FROM audio_files')
         audio_count = self.cursor.fetchone()[0]
-        self.cursor.execute('SELECT COUNT(*) FROM algorithms')
-        algo_count = self.cursor.fetchone()[0]
-        print(f"Database now has {audio_count} audio file entries and {algo_count} algorithm entries.")
-
-    def _get_or_create_algorithm_id(self, algorithm_name):
-        """Gets the ID for an algorithm name, creating it if it doesn't exist yet."""
-        self.cursor.execute('SELECT algorithm_id FROM algorithms WHERE name = ?', (algorithm_name,))
-        result = self.cursor.fetchone()
-        if result:
-            return result[0]
-        else:
-            self.cursor.execute('INSERT INTO algorithms (name) VALUES (?)', (algorithm_name,))
-            algo_id = self.cursor.lastrowid
-            self.conn.commit()      
-            print(f"Registered new algorithm: '{algorithm_name}' with ID: {algo_id}")
-            return algo_id
-
+        print(f"Database now has {audio_count} audio file entries.")
 
     def file_already_registered(self, file_path):
         """Checks if the audio file path already exists in the audio_files table."""
@@ -118,11 +86,6 @@ class SQLiteDB:
         """
         if not fingerprints:
             print(f"Warning: No fingerprints provided for {file_path} with algorithm {algorithm_name}. Skipping registration.")
-            return None
-
-        algorithm_id = self._get_or_create_algorithm_id(algorithm_name)
-        if algorithm_id is None:
-            print(f"Error: Could not get or create algorithm ID for '{algorithm_name}'. Can't register fingerprints.")
             return None
 
         # Check if file exists, insert if not, get audio_id
@@ -145,116 +108,30 @@ class SQLiteDB:
                 self.conn.rollback()
                 return None
 
-        # Insert fingerprints
-        try:
-            fingerprint_data = [
-                (hash_hex, anchor_time, audio_id, algorithm_id)
-                for hash_hex, anchor_time in fingerprints
-            ]
+        # Currently, we support registration for MaximaPairingAlgorithm only.
+        if algorithm_name == "MaximaPairingAlgorithm":
+            try:
+                fingerprint_data = [
+                    (hash_hex, anchor_time, audio_id)
+                    for hash_hex, anchor_time in fingerprints
+                ]
+                self.cursor.executemany(
+                    'INSERT INTO maxima_pairing_fingerprints (hash_hex, anchor_time, audio_id) VALUES (?, ?, ?)',
+                    fingerprint_data
+                )
+                self.conn.commit()
+                print(f"Successfully registered {len(fingerprint_data)} fingerprints for audio_id {audio_id} in table 'maxima_pairing_fingerprints'.")
+                return audio_id
 
-            self.cursor.executemany(
-                'INSERT INTO fingerprints (hash_hex, anchor_time, audio_id, algorithm_id) VALUES (?, ?, ?, ?)',
-                fingerprint_data
-            )
-            self.conn.commit()
-            print(f"Successfully registered {len(fingerprint_data)} fingerprints for audio_id {audio_id}, algorithm_id {algorithm_id}.")
-            return audio_id
-
-        except sqlite3.Error as e:
-            print(f"Database error during fingerprint registration for {file_path} (algorithm {algorithm_name}): {e}")
-            self.conn.rollback()
+            except sqlite3.Error as e:
+                print(f"Database error during fingerprint registration for {file_path} (algorithm {algorithm_name}): {e}")
+                self.conn.rollback()
+                return None
+        else:
+            print(f"Algorithm '{algorithm_name}' is not supported for registration.")
             return None
 
-
-    def _score_potential_matches(self, potential_matches):
-        """Scores potential matches based on time-difference alignment."""
-        match_scores = defaultdict(lambda: defaultdict(int)) # {audio_id: {delta: count}}
-        final_scores = {} # {audio_id: best_score}
-
-        for audio_id, time_pairs in potential_matches.items():
-            for db_time, query_time in time_pairs:
-                db_time_int = int.from_bytes(db_time, byteorder=sys.byteorder)
-                delta = db_time_int - int(query_time) 
-                match_scores[audio_id][delta] += 1
-
-            if match_scores[audio_id]:  # Check if audio_id has any deltas
-                # Find the delta with the highest count for this audio_id
-                best_delta = max(match_scores[audio_id], key=match_scores[audio_id].get)
-                final_scores[audio_id] = match_scores[audio_id][best_delta]
-
-        return final_scores
-
-    def find_match(self, query_fingerprints, algorithm_name):
-        """
-        Finds the best match for a list of query fingerprints generated by a specific algorithm.
-        Returns (best_match_audio_id, message) or (None, message).
-        """
-        if not query_fingerprints:
-             return None, "No query fingerprints provided."
-
-        # Look up the algorithm ID - do not create it here
-        self.cursor.execute('SELECT algorithm_id FROM algorithms WHERE name = ?', (algorithm_name,))
-        result = self.cursor.fetchone()
-        if not result:
-            return None, f"Algorithm '{algorithm_name}' not found in the database. Cannot perform match."
-        algorithm_id = result[0]
-
-        # `potential_matches` stores {db_audio_id: [(db_anchor_time, query_anchor_time), ...]}
-        potential_matches = defaultdict(list)
-
-        unique_query_hashes = {fp[0] for fp in query_fingerprints}
-        print(f"Querying {len(unique_query_hashes)} unique hashes for algorithm '{algorithm_name}'")
-
-        placeholders = ','.join('?' for _ in unique_query_hashes)
-        # Query fingerprints matching the hash AND the specific algorithm ID
-        sql = f'''
-            SELECT hash_hex, audio_id, anchor_time
-            FROM fingerprints
-            WHERE hash_hex IN ({placeholders}) AND algorithm_id = ?
-        '''
-        query_params = list(unique_query_hashes) + [algorithm_id]
-
-        # Store results indexed by hash for efficient lookup
-        db_matches_by_hash = defaultdict(list) # {hash: [(audio_id, anchor_time), ...]}
-        try:
-            self.cursor.execute(sql, query_params)
-            results = self.cursor.fetchall()
-            for db_hash, db_audio_id, db_anchor_time in results:
-                db_matches_by_hash[db_hash].append((db_audio_id, db_anchor_time))
-        except sqlite3.Error as e:
-            print(f"Database error during hash lookup for algorithm {algorithm_name}: {e}")
-            return None, "Database error during search."
-
-        print(f"Retrieved {len(results)} total hash matches from DB for algorithm '{algorithm_name}'.")
-
-        # Correlate query fingerprints with database matches
-        for query_hash, query_anchor_time in query_fingerprints:
-            if query_hash in db_matches_by_hash:
-                for db_audio_id, db_anchor_time in db_matches_by_hash[query_hash]:
-                    potential_matches[db_audio_id].append((db_anchor_time, query_anchor_time))
-
-        if not potential_matches:
-            return None, f"No matching hashes found in the database for algorithm '{algorithm_name}'."
-
-        print(f"Found potential matches in {len(potential_matches)} audio files. Scoring...")
-
-        final_scores = self._score_potential_matches(potential_matches)
-
-        if not final_scores:
-            return None, "Matching hashes found, but could not determine a consistent time alignment."
-
-        # Find the audio_id with the highest score
-        best_match_audio_id = max(final_scores, key=final_scores.get)
-        best_score = final_scores[best_match_audio_id]
-        audio_info = self._get_audio_info(best_match_audio_id)
-
-        if not audio_info:
-             return None, f"Match found (Audio ID: {best_match_audio_id}, Score: {best_score}), but failed to retrieve audio file details."
-
-        audio_name = audio_info['filename']
-        return best_match_audio_id, f"Best match: '{audio_name}' (ID: {best_match_audio_id}). Score: {best_score}."
-
-    def _get_audio_info(self, audio_id):
+    def get_audio_info(self, audio_id):
         """Retrieves the audio file path and filename for a given audio_id."""
         self.cursor.execute('SELECT file_path, filename FROM audio_files WHERE audio_id = ?', (audio_id,))
         result = self.cursor.fetchone()
@@ -270,4 +147,4 @@ class SQLiteDB:
             self.conn.close()
             print("Database connection closed.")
         else:
-            print("No database connection to close.")
+            print("No database connection to close.") 

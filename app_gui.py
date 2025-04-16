@@ -120,7 +120,7 @@ class MatchingWorker(QThread):
             return
 
         self.log_signal.emit(f"Generated {len(query_fingerprints)} fingerprints for the query file.")
-        best_match_audio_id, message = db.find_match(query_fingerprints, fingerprint_generator.name)
+        best_match_audio_id, message = fingerprint_generator.find_match(query_fingerprints, db)
         elapsed = time.time() - start
         self.log_signal.emit(f"{message}\nMatching took {elapsed:.2f}s.")
         db.close()
@@ -428,4 +428,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec_()) 

@@ -25,6 +25,11 @@ class FingerprintAlgorithm(ABC):
     def generate_fingerprints(self, file_path, start_time=None, end_time = None):
         """Generates fingerprints for the given audio file (or its segment)."""
         pass
+    
+    @abstractmethod
+    def find_match(self, query_fingerprints, db):
+        """Finds matches for the given fingerprints in the database."""
+        pass 
 
     def _load_and_preprocess_audio(self, file_path, target_sr):
         """Loads an audio file, ensures it is mono, and resamples to the target sample rate"""
