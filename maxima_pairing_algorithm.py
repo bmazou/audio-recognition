@@ -24,11 +24,6 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         self.target_f_max_delta = target_f_max_delta    # Maximum frequency difference for fingerprint pairs (in frequency bins)
         self.hash_algorithm = hash_algorithm            # Hash algorithm for fingerprint generation 
 
-    def _calculate_spectrogram(self, y):
-        """Calculates the magnitude spectrogram using short-time Fourier transform (STFT)."""
-        stft_result = librosa.stft(y, n_fft=self.n_fft, hop_length=self.hop_length)
-        spectrogram = np.abs(stft_result)
-        return spectrogram
 
     def _find_spectrogram_peaks(self, spectrogram):
         """Uses a maximum filter to detect local peaks in the spectrogram."""
@@ -46,7 +41,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
             print(f"Error loading audio from {file_path}")
             return None
 
-        spectrogram = self._calculate_spectrogram(audio)
+        spectrogram = self._calculate_spectrogram(audio, self.n_fft, self.hop_length)
         peaks = self._find_spectrogram_peaks(spectrogram)
         if peaks.size == 0:
             print(f"No peaks found for {file_path}")

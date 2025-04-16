@@ -30,6 +30,12 @@ class FingerprintAlgorithm(ABC):
     def find_match(self, query_fingerprints, db):
         """Finds matches for the given fingerprints in the database."""
         pass 
+    
+    def _calculate_spectrogram(self, y, n_fft, hop_length):
+        """Calculates the magnitude spectrogram using short-time Fourier transform (STFT)."""
+        stft_result = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
+        spectrogram = np.abs(stft_result)
+        return spectrogram
 
     def _load_and_preprocess_audio(self, file_path, target_sr):
         """Loads an audio file, ensures it is mono, and resamples to the target sample rate"""
