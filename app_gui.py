@@ -42,10 +42,7 @@ class RegistrationWorker(QThread):
             target_f_max_delta=self.params['target_f_max_delta'],
             hash_algorithm=hashlib.sha1 if self.params['hash_algorithm'] == "sha1" else hashlib.sha256
         )
-        db = sqlite_db.SQLiteDB(db_path=self.db_path)
-        if self.clear_db:
-            self.log_signal.emit(f"Clearing database at {self.db_path}...")
-            db.clear_db()
+        db = sqlite_db.SQLiteDB(db_path=self.db_path, clear_db=self.clear_db)
 
         audio_files = []
         for root, dirs, files in os.walk(self.data_dir):
@@ -69,7 +66,7 @@ class RegistrationWorker(QThread):
                 self.log_signal.emit(f"Could not generate fingerprints for {file}. Skipping registration.")
                 continue
 
-            audio_id = db.register_audio(file, {"filename": os.path.basename(file)}, fingerprints)
+            audio_id = db.register_audio(file, {"filename": os.path.basename(file)}, fingerprints, fingerprint_generator.name)
             duration = time.time() - start
             if audio_id is not None:
                 register_count += 1
@@ -123,7 +120,7 @@ class MatchingWorker(QThread):
             return
 
         self.log_signal.emit(f"Generated {len(query_fingerprints)} fingerprints for the query file.")
-        best_match_audio_id, message = db.find_match(query_fingerprints)
+        best_match_audio_id, message = db.find_match(query_fingerprints, fingerprint_generator.name)
         elapsed = time.time() - start
         self.log_signal.emit(f"{message}\nMatching took {elapsed:.2f}s.")
         db.close()
