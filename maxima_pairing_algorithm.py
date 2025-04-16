@@ -34,8 +34,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         return peak_coords  
 
     def generate_fingerprints(self, file_path, start_time=None, end_time=None):
-        audio = self._load_and_preprocess_audio(file_path, self.sr)
-        audio = self._cut_audio(audio, start_time, end_time, self.sr)
+        audio = self._load_and_preprocess_audio(file_path, self.sr, start_time, end_time)
         
         if audio is None:
             print(f"Error loading audio from {file_path}")

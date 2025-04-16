@@ -37,8 +37,8 @@ class FingerprintAlgorithm(ABC):
         spectrogram = np.abs(stft_result)
         return spectrogram
 
-    def _load_and_preprocess_audio(self, file_path, target_sr):
-        """Loads an audio file, ensures it is mono, and resamples to the target sample rate"""
+    def _load_and_preprocess_audio(self, file_path, target_sr, start_time, end_time):
+        """Loads an audio file, ensures it is mono, resamples to target sample rate, and cuts to the specified time range."""
         try:
             audio, original_sr = librosa.load(file_path, sr=None, mono=False)
             # Convert to mono if necessary.
@@ -46,15 +46,16 @@ class FingerprintAlgorithm(ABC):
                 audio = np.mean(audio, axis=0)
             
             # Resample if the original sample rate is different.
-            if original_sr != self.sr:
+            if original_sr != target_sr:
                 audio = librosa.resample(audio, orig_sr=original_sr, target_sr=target_sr)
 
-            return audio
+            return self._cut_audio(audio, target_sr, start_time, end_time)
+            
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
             return None
 
-    def _cut_audio(self, audio, start_time, end_time, sr):
+    def _cut_audio(self, audio, sr, start_time, end_time):
         """Cuts the audio to the specified time range. Returns original audio if no valid range is provided."""
         if start_time is None or end_time is None:
             return audio
