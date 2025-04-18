@@ -70,6 +70,21 @@ class SQLiteDB:
                 FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id) ON DELETE CASCADE
             )
         ''')
+        
+        # Table for ChromaAlgorithm fingerprints.
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chroma_fingerprints (
+                hash_hex TEXT NOT NULL,
+                frame_index INTEGER NOT NULL,
+                audio_id INTEGER NOT NULL,
+                FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id)
+            )
+        ''')
+        self.cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_chroma_hash
+            ON chroma_fingerprints (hash_hex)
+        ''')
+        
         self.cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_spectral_patch_hash
             ON spectral_patch_fingerprints (hash_hex)
@@ -106,6 +121,13 @@ class SQLiteDB:
                 JOIN audio_files ON audio_files.audio_id = spectral_patch_fingerprints.audio_id
                 WHERE audio_files.file_path = ? LIMIT 1
             ''', (file_path,))
+            
+        elif algorithm_name == "ChromaAlgorithm":
+            self.cursor.execute('''
+                SELECT 1 FROM chroma_fingerprints
+                JOIN audio_files ON audio_files.audio_id = chroma_fingerprints.audio_id
+                WHERE audio_files.file_path = ? LIMIT 1
+            ''', (file_path,))
         
         else:
             print(f"Unknown algorithm name: {algorithm_name}")
@@ -131,7 +153,7 @@ class SQLiteDB:
                     (file_path, audio_info.get('filename', os.path.basename(file_path)))
                 )
                 audio_id = self.cursor.lastrowid
-                print(f"Registered new file: {file_path} with audio_id {audio_id}")
+                # print(f"Registered new file: {file_path} with audio_id {audio_id}")
             except sqlite3.Error as e:
                 print(f"Database error inserting audio file {file_path}: {e}")
                 self.conn.rollback()
@@ -149,7 +171,7 @@ class SQLiteDB:
                     fingerprint_data
                 )
                 self.conn.commit()
-                print(f"Registered {len(fingerprint_data)} fingerprints in 'maxima_pairing_fingerprints' for audio_id {audio_id}.")
+                # print(f"Registered {len(fingerprint_data)} fingerprints in 'maxima_pairing_fingerprints' for audio_id {audio_id}.")
                 
                 return audio_id
             except sqlite3.Error as e:
@@ -173,8 +195,26 @@ class SQLiteDB:
             except sqlite3.Error as e:
                 print(f"Database error during registration (SpectralPatchAlgorithm) for {file_path}: {e}")
                 self.conn.rollback()
-                
                 return None
+            
+        elif algorithm_name == "ChromaAlgorithm":
+            try:
+                fingerprint_data = [
+                    (hash_hex, frame_index, audio_id)
+                    for hash_hex, frame_index in fingerprints
+                ]
+                self.cursor.executemany(
+                    'INSERT INTO chroma_fingerprints (hash_hex, frame_index, audio_id) VALUES (?, ?, ?)',
+                    fingerprint_data
+                )
+                self.conn.commit()
+                print(f"Registered {len(fingerprint_data)} fingerprints in 'chroma_fingerprints' for audio_id {audio_id}.")
+                return audio_id
+            except sqlite3.Error as e:
+                print(f"Database error during registration (ChromaAlgorithm) for {file_path}: {e}")
+                self.conn.rollback()
+                return None
+            
         else:
             print(f"Algorithm '{algorithm_name}' is not supported for registration.")
             return None

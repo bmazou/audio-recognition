@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
 
 import sqlite_db
 import utils
+from chroma_algorithm import ChromaAlgorithm
 from maxima_pairing_algorithm import MaximaPairingAlgorithm
 from spectral_patch_algorithm import SpectralPatchAlgorithm
 
@@ -53,6 +54,14 @@ class RegistrationWorker(QThread):
                 min_patch_energy=self.params['min_patch_energy'],
                 hash_algorithm=hashlib.sha1 if self.params['hash_algorithm'] == "sha1" else hashlib.sha256
             )
+        elif self.algo_name == "ChromaAlgorithm":
+            fingerprint_generator = ChromaAlgorithm(
+                sr=self.params['sample_rate'],
+                n_fft=self.params['n_fft'],
+                hop_length=self.params['hop_length'],
+                threshold=self.params['threshold'],
+                hash_algorithm=hashlib.sha1 if self.params['hash_algorithm'] == "sha1" else hashlib.sha256
+            )            
         else:
             self.log_signal.emit("Unsupported algorithm selected.")
             self.finished_signal.emit()
@@ -135,6 +144,15 @@ class MatchingWorker(QThread):
                 min_patch_energy=self.params['min_patch_energy'],
                 hash_algorithm=hashlib.sha1 if self.params['hash_algorithm'] == "sha1" else hashlib.sha256
             )
+        elif self.algo_name == "ChromaAlgorithm":
+            from chroma_algorithm import ChromaAlgorithm
+            fingerprint_generator = ChromaAlgorithm(
+                sr=self.params['sample_rate'],
+                n_fft=self.params['n_fft'],
+                hop_length=self.params['hop_length'],
+                threshold=self.params['threshold'],
+                hash_algorithm=hashlib.sha1 if self.params['hash_algorithm'] == "sha1" else hashlib.sha256
+            )            
         else:
             self.log_signal.emit("Unsupported algorithm selected.")
             self.finished_signal.emit()
@@ -273,17 +291,17 @@ class MainWindow(QMainWindow):
         self.query_file_browse.clicked.connect(self._browse_query_file)
         form.addRow("", self.query_file_browse)
 
-        self.segment_start_input = QLineEdit("00:00")
-        form.addRow("Start Time (mm:ss):", self.segment_start_input)
-        self.segment_end_input = QLineEdit("")
-        form.addRow("End Time (mm:ss):", self.segment_end_input)
-        self._set_file_duration(self.query_file_input.text().strip())
-
         self.match_db_path_input = QLineEdit("fingerprints.db")
         form.addRow("Database Path:", self.match_db_path_input)
         self.match_db_browse = QPushButton("Browse")
         self.match_db_browse.clicked.connect(self._browse_db_file_match)
         form.addRow("", self.match_db_browse)
+
+        self.segment_start_input = QLineEdit("00:00")
+        form.addRow("Start Time (mm:ss):", self.segment_start_input)
+        self.segment_end_input = QLineEdit("")
+        form.addRow("End Time (mm:ss):", self.segment_end_input)
+
 
         self.match_btn = QPushButton("Find Match")
         self.match_btn.clicked.connect(self._start_matching)
@@ -311,7 +329,7 @@ class MainWindow(QMainWindow):
         
         # Dropdown menu with algorithm options
         self.algorithm_combo = QComboBox()
-        self.algorithm_combo.addItems(["MaximaPairingAlgorithm", "SpectralPatchAlgorithm"])
+        self.algorithm_combo.addItems(["MaximaPairingAlgorithm", "SpectralPatchAlgorithm", "ChromaAlgorithm"])        
         self.algorithm_combo.currentIndexChanged.connect(self._update_algo_params_stack)
         algo_selection_layout.addWidget(self.algorithm_combo)
         
@@ -395,6 +413,35 @@ class MainWindow(QMainWindow):
         page_spectral.setLayout(spectral_layout)
         self.algo_params_stack.addWidget(page_spectral)
         
+        # ChromaAlgorithm parameters
+        page_chroma = QWidget()
+        chroma_layout = QHBoxLayout()
+        
+        left_chroma_form = QFormLayout()
+        self.sample_rate_input_chroma = QLineEdit("22050")
+        left_chroma_form.addRow("Sample Rate:", self.sample_rate_input_chroma)
+        self.n_fft_input_chroma = QLineEdit("2048")
+        left_chroma_form.addRow("FFT Window Size:", self.n_fft_input_chroma)
+        self.hop_length_input_chroma = QLineEdit("512")
+        left_chroma_form.addRow("Hop Length:", self.hop_length_input_chroma)
+        
+        right_chroma_form = QFormLayout()
+        self.threshold_input = QLineEdit("0.5")
+        right_chroma_form.addRow("Chroma Threshold:", self.threshold_input)
+        self.chroma_hash_algorithm_combo = QComboBox()
+        self.chroma_hash_algorithm_combo.addItems(["sha1", "sha256"])
+        right_chroma_form.addRow("Hash Algorithm:", self.chroma_hash_algorithm_combo)
+        
+        left_chroma_group = QGroupBox("")
+        left_chroma_group.setLayout(left_chroma_form)
+        right_chroma_group = QGroupBox("")
+        right_chroma_group.setLayout(right_chroma_form)
+        
+        chroma_layout.addWidget(left_chroma_group)
+        chroma_layout.addWidget(right_chroma_group)
+        page_chroma.setLayout(chroma_layout)
+        self.algo_params_stack.addWidget(page_chroma)
+        
         layout.addWidget(self.algo_params_stack)
         widget.setLayout(layout)
 
@@ -441,6 +488,7 @@ class MainWindow(QMainWindow):
         params = {}
         is_maxima_pairing_algo = algo_page == 0
         is_spectral_patch_algo = algo_page == 1
+        is_chroma_algo = algo_page == 2
         
         if is_maxima_pairing_algo:
             params['sample_rate'] = int(self.sample_rate_input.text())
@@ -460,6 +508,16 @@ class MainWindow(QMainWindow):
             params['patch_size'] = int(self.patch_size_input.text())
             params['min_patch_energy'] = float(self.min_patch_energy_input.text())
             params['hash_algorithm'] = self.spectral_hash_algorithm_combo.currentText()
+        
+        elif is_chroma_algo:
+            params['sample_rate'] = int(self.sample_rate_input_chroma.text())
+            params['n_fft'] = int(self.n_fft_input_chroma.text())
+            params['hop_length'] = int(self.hop_length_input_chroma.text())
+            params['threshold'] = float(self.threshold_input.text())
+            params['hash_algorithm'] = self.chroma_hash_algorithm_combo.currentText()
+        
+        else:
+            raise ValueError(f"Unknown algorithm selected: {algo_name}")
             
         return params
 
