@@ -1,7 +1,7 @@
-import hashlib
 import sys
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage import maximum_filter
 
@@ -15,19 +15,17 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
                  target_t_min, target_t_max, target_f_max_delta, hash_algorithm):
         super().__init__(self.ALGORITHM_NAME)
         self.sr = sr                                    # Target sample rate (Hz)
-        self.n_fft = n_fft                              # Window size for FTT (number of samples)
+        self.n_fft = n_fft                              # Window size for FFT (number of samples)
         self.hop_length = hop_length                    # Number of samples between successive frames
         self.neighborhood_size = neighborhood_size      # Size of the neighborhood for peak detection
-        self.min_amplitude = min_amplitude              # Minimum amplitude for peak detection
+        self.min_amplitude = min_amplitude              # Minimum decibel value for peak detection
         self.target_t_min = target_t_min                # Minimum time difference for fingerprint pairs (in STFT frames)
         self.target_t_max = target_t_max                # Maximum time difference for fingerprint pairs (in STFT frames)
         self.target_f_max_delta = target_f_max_delta    # Maximum frequency difference for fingerprint pairs (in frequency bins)
         self.hash_algorithm = hash_algorithm            # Hash algorithm for fingerprint generation 
 
-
     def _find_spectrogram_peaks(self, spectrogram):
-        """Uses a maximum filter to detect local peaks in the spectrogram."""
-        data_max = maximum_filter(spectrogram, size=self.neighborhood_size, mode='constant', cval=0.0)
+        data_max = maximum_filter(spectrogram, size=self.neighborhood_size, mode='constant', cval=-np.inf)
         peaks_mask = (spectrogram == data_max)
         peaks_mask &= (spectrogram >= self.min_amplitude)
         peak_coords = np.argwhere(peaks_mask)
@@ -35,13 +33,13 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
 
     def generate_fingerprints(self, file_path, start_time=None, end_time=None):
         audio = self._load_and_preprocess_audio(file_path, self.sr, start_time, end_time)
-        
         if audio is None:
             print(f"Error loading audio from {file_path}")
             return None
 
         spectrogram = self._calculate_spectrogram(audio, self.n_fft, self.hop_length)
-        peaks = self._find_spectrogram_peaks(spectrogram)
+        spectrogram_db = librosa.amplitude_to_db(spectrogram, ref=np.max)
+        peaks = self._find_spectrogram_peaks(spectrogram_db)
         if peaks.size == 0:
             print(f"No peaks found for {file_path}")
             return None 
@@ -69,7 +67,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
                         hasher.update(hash_input)
                         hash_hex = hasher.hexdigest()
                         fingerprints.append((hash_hex, anchor_time))
-
+        
         return fingerprints  
 
     def _score_potential_matches(self, potential_matches):
@@ -99,7 +97,6 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
             return None, "No query fingerprints provided."
 
         unique_query_hashes = {fp[0] for fp in query_fingerprints}
-        print(f"Querying {len(unique_query_hashes)} unique hashes for algorithm '{self.ALGORITHM_NAME}'")
 
         placeholders = ','.join('?' for _ in unique_query_hashes)
         sql = f'''
@@ -114,8 +111,6 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         except Exception as e:
             print(f"Database error during hash lookup for algorithm {self.ALGORITHM_NAME}: {e}")
             return None, "Database error during search."
-
-        print(f"Retrieved {len(results)} total hash matches from DB for algorithm '{self.ALGORITHM_NAME}'.")
 
         # Group DB matches by hash for efficient correlating.
         db_matches_by_hash = {}
@@ -133,9 +128,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         if not potential_matches:
             return None, f"No matching hashes found in the database for algorithm '{self.ALGORITHM_NAME}'."
 
-        print(f"Found potential matches in {len(potential_matches)} audio files. Scoring...")
         final_scores = self._score_potential_matches(potential_matches)
-
         if not final_scores:
             return None, "Matching hashes found, but could not determine a consistent time alignment."
 
