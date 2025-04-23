@@ -12,10 +12,27 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
                              QVBoxLayout, QWidget)
 
 import sqlite_db
-import utils
 from chroma_algorithm import ChromaAlgorithm
 from maxima_pairing_algorithm import MaximaPairingAlgorithm
 from spectral_patch_algorithm import SpectralPatchAlgorithm
+
+
+def mmss_to_seconds(mmss):
+    """Converts a time string in mm:ss format to seconds."""
+    try:
+        parts = mmss.strip().split(":")
+        if len(parts) != 2:
+            print(f"Invalid time format: '{mmss}'. Expected format is mm:ss.")
+            return None
+        
+        
+        minutes = float(parts[0])
+        seconds = float(parts[1])
+        return minutes * 60 + seconds
+        
+    except Exception as e:
+        print(f"Error converting time '{mmss}': {e}")
+        return None
 
 
 class RegistrationWorker(QThread):
@@ -561,8 +578,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Input Error", "Please select a valid database file.")
             return
 
-        segment_start = utils.mmss_to_seconds(self.segment_start_input.text().strip())
-        segment_end = utils.mmss_to_seconds(self.segment_end_input.text().strip())
+        segment_start = mmss_to_seconds(self.segment_start_input.text().strip())
+        segment_end = mmss_to_seconds(self.segment_end_input.text().strip())
         algo_name = self.algorithm_combo.currentText()
         params = self._get_current_algorithm_params()
         self.match_log.clear()
