@@ -48,14 +48,14 @@ This project implements and experiments with several ways to do audio recognitio
 
 1.  **Clone the repository:**
     ```bash
-    git clone <https://github.com/bmazou/audio-recognition>
-    cd <audio-recognition>
+    git clone https://github.com/bmazou/audio-recognition
+    cd audio-recognition
     ```
 2.  **Create and activate a virtual environment (optional):**
     ```bash
-    python -m venv venv
-    source venv/bin/activate # On Linux/MacOS
-    venv\Scripts\activate    # On Windows
+    python -m venv audio
+    source audio/bin/activate # On Linux/MacOS
+    audio\Scripts\activate    # On Windows
     ```
 
 3.  **Install the required packages:**
@@ -65,9 +65,6 @@ This project implements and experiments with several ways to do audio recognitio
 
 ## Usage
 
-<details>
-<summary>Click to expand: Detailed description</summary>
-
 ### Graphical User Interface
 
 The primary way to interact with the app is through the GUI.
@@ -76,24 +73,31 @@ The primary way to interact with the app is through the GUI.
     ```bash
     python app_gui.py
     ```
-2.  **Configure Algorithm:**
+
+<details>
+<summary>Click to expand: Detailed description</summary>
+
+1.  **Configure Algorithm:**
     - Select the desired fingerprinting algorithm from the dropdown menu.
     - Adjust the parameters for the selected algorithm in the "Algorithm Parameters" section. Default values are provided.
-3.  **Register Audio Files:**
+2.  **Register Audio Files:**
     - In the "Registration" section, specify the directory containing your audio files (`Data Directory`).
     - Specify the path for the SQLite database file (`Database Path`). A new file will be created if it doesn't exist.
     - Optionally, check "Clear DB before registering" to remove all existing fingerprints before adding new ones (it removes everything, so use with caution).
     - Click "Register Audio Files". The process will run in the background, and logs will appear in the bottom-left text area. Files already present in the DB (for the selected algorithm) will be skipped unless the DB is cleared.
-4.  **Match an Audio File:**
+3.  **Match an Audio File:**
     - In the "Matching" section, select the `Query File` you want to identify.
     - Specify the `Database Path` containing the fingerprints to search against.
     - Optionally, provide `Start Time` and `End Time` (in `mm:ss` format) to identify only a segment of the query file. Leave `End Time` blank to match until the end.
     - Make sure the "Algorithm Parameters" are identical to the ones used during registration.
     - Click "Find Match". The matching process runs in the background, and results/logs appear in the bottom-right text area.
+</details>
 
 ### Testing Script
 
 The `tests.py` script provides a way to test the accuracy of the algorithms on a dataset.
+<details>
+<summary>Click to expand: Detailed description</summary>
 
 1.  **Prepare Data:** Place the audio files you want to use for testing inside a directory named `data` (or modify the `data_dir` variable in `tests.py`).
 2.  **Configure Test:** Open `tests.py` and modify the `main()` function to select which algorithm test function to run (e.g., `test_maxima_pairing_algo()`, `test_chroma_algo()`). You can also adjust the parameters passed to these functions. Set `clear_db=True` (default for most tests) to start with a fresh database for each run.
