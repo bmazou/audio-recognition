@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
         heading.setStyleSheet("font-size: 14pt; font-weight: bold;")
         layout.addWidget(heading)
 
-        self.query_file_input = QLineEdit("data/fma/music-fma-0002.wav")
+        self.query_file_input = QLineEdit("data/music-fma-0005.wav")
         self.query_file_input.setPlaceholderText("Select the query audio file")
         form.addRow("Query File:", self.query_file_input)
         self.query_file_browse = QPushButton("Browse")
@@ -364,7 +364,7 @@ class MainWindow(QMainWindow):
         left_form = QFormLayout()
         self.sample_rate_input = QLineEdit("22050")
         left_form.addRow("Sample Rate:", self.sample_rate_input)
-        self.n_fft_input = QLineEdit("2048")
+        self.n_fft_input = QLineEdit("1024")
         left_form.addRow("FFT Window Size:", self.n_fft_input)
         self.hop_length_input = QLineEdit("512")
         left_form.addRow("Hop Length:", self.hop_length_input)
@@ -373,11 +373,11 @@ class MainWindow(QMainWindow):
         
         # Right column parameters for maxima
         right_form = QFormLayout()
-        self.min_amplitude_input = QLineEdit("10")
+        self.min_amplitude_input = QLineEdit("-20")
         right_form.addRow("Minimum Amplitude:", self.min_amplitude_input)
         self.target_t_min_input = QLineEdit("5")
         right_form.addRow("Target T Min:", self.target_t_min_input)
-        self.target_t_max_input = QLineEdit("100")
+        self.target_t_max_input = QLineEdit("40")
         right_form.addRow("Target T Max:", self.target_t_max_input)
         self.target_f_max_delta_input = QLineEdit("100")
         right_form.addRow("Target F Max Delta:", self.target_f_max_delta_input)
