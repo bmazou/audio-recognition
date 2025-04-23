@@ -13,6 +13,8 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
     
     def __init__(self, sr, n_fft, hop_length, neighborhood_size, min_amplitude,
                  target_t_min, target_t_max, target_f_max_delta, hash_algorithm):
+        """Initializes the MaximaPairingAlgorithm with specific parameters."""
+
         super().__init__(self.ALGORITHM_NAME)
         self.sr = sr                                    # Target sample rate (Hz)
         self.n_fft = n_fft                              # Window size for FFT (number of samples)
@@ -25,6 +27,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         self.hash_algorithm = hash_algorithm            # Hash algorithm for fingerprint generation 
 
     def _find_spectrogram_peaks(self, spectrogram):
+        """Identifies peaks in the spectrogram based on neighborhood and amplitude threshold."""
         data_max = maximum_filter(spectrogram, size=self.neighborhood_size, mode='constant', cval=-np.inf)
         peaks_mask = (spectrogram == data_max)
         peaks_mask &= (spectrogram >= self.min_amplitude)
@@ -32,6 +35,7 @@ class MaximaPairingAlgorithm(FingerprintAlgorithm):
         return peak_coords  
 
     def generate_fingerprints(self, file_path, start_time=None, end_time=None):
+        """Generates fingerprints for an audio file using the maxima pairing method."""
         audio = self._load_and_preprocess_audio(file_path, self.sr, start_time, end_time)
         if audio is None:
             print(f"Error loading audio from {file_path}")

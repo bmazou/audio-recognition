@@ -49,6 +49,7 @@ class RegistrationWorker(QThread):
         self.params = params
 
     def run(self):
+        """Executes the audio registration process in a separate thread."""
         self.log_signal.emit("Starting registration...")
         if self.algo_name == "MaximaPairingAlgorithm":
             fingerprint_generator = MaximaPairingAlgorithm(
@@ -125,6 +126,7 @@ class MatchingWorker(QThread):
     finished_signal = pyqtSignal()
 
     def __init__(self, query_file, db_path, algo_name, params, start_time, end_time):
+        """Initializes the matching worker thread."""
         super().__init__()
         self.query_file = query_file
         self.db_path = db_path
@@ -194,6 +196,7 @@ class MatchingWorker(QThread):
 
 class MainWindow(QMainWindow):
     def __init__(self):
+        """Initializes the main application window."""
         self.HEIGHT = 700
         self.WIDTH = int(self.HEIGHT * 1.5)
         super().__init__()
@@ -205,6 +208,7 @@ class MainWindow(QMainWindow):
         self._center_window()
 
     def _center_window(self):
+        """Centers the main window on the screen."""
         screen = QApplication.primaryScreen()
         screen_center = screen.availableGeometry().center()
         frame_geom = self.frameGeometry()
@@ -212,6 +216,7 @@ class MainWindow(QMainWindow):
         self.move(frame_geom.topLeft())
 
     def _init_ui(self):
+        """Sets up the main user interface layout and components."""
         main_layout = QVBoxLayout()
         
         algo_params_container = QWidget()
@@ -256,6 +261,7 @@ class MainWindow(QMainWindow):
         
 
     def _setup_registration_widget(self, widget):
+        """Sets up the UI elements for the registration section."""
         layout = QVBoxLayout()
         form = QFormLayout()
         
@@ -293,6 +299,7 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
 
     def _setup_matching_widget(self, widget):
+        """Sets up the UI elements for the matching section."""
         layout = QVBoxLayout()
         form = QFormLayout()
         
@@ -328,6 +335,7 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
 
     def _setup_algo_params_container(self, widget):
+        """Sets up the UI elements for selecting the algorithm and configuring its parameters."""
         layout = QVBoxLayout()
         
         # Add a heading label with center alignment
@@ -463,25 +471,30 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
 
     def _update_algo_params_stack(self):
+        """Switches the displayed parameter view based on the selected algorithm."""
         index = self.algorithm_combo.currentIndex()
         self.algo_params_stack.setCurrentIndex(index)
 
     def _browse_data_dir(self):
+        """Opens a dialog for selecting the audio data directory."""
         folder = QFileDialog.getExistingDirectory(self, "Select Data Directory")
         if folder:
             self.data_dir_input.setText(folder)
 
     def _browse_db_file(self):
+        """Opens a dialog for selecting or creating the database file for registration."""
         file_path, _ = QFileDialog.getSaveFileName(self, "Select Database File", "", "SQLite DB (*.db);;All Files (*)")
         if file_path:
             self.db_path_input.setText(file_path)
 
     def _browse_db_file_match(self):
+        """Opens a dialog for selecting the database file for matching."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Database File", "", "SQLite DB (*.db);;All Files (*)")
         if file_path:
             self.match_db_path_input.setText(file_path)
 
     def _set_file_duration(self, file_path):
+        """Loads the selected query file to get its duration and sets the end time input."""
         try:
             y, sr = librosa.load(file_path, sr=None)
             duration = librosa.get_duration(y=y, sr=sr)
@@ -493,12 +506,14 @@ class MainWindow(QMainWindow):
             self.match_log.append(f"Error loading file duration: {e}")
 
     def _browse_query_file(self):
+        """Opens a dialog for selecting the query audio file and updates duration fields."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Query Audio File", "", "Audio Files (*.wav *.mp3 *.flac *.ogg *.m4a);;All Files (*)")
         if file_path:
             self.query_file_input.setText(file_path)
             self._set_file_duration(file_path)
 
     def _get_current_algorithm_params(self):
+        """Retrieves the current algorithm parameters from the UI inputs."""
         algo_name = self.algorithm_combo.currentText()
         algo_page = self.algorithm_combo.currentIndex()
         

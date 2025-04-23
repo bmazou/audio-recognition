@@ -1,7 +1,5 @@
 import os
 import sqlite3
-import sys
-from collections import defaultdict
 
 """
 Database Schema:
@@ -22,15 +20,22 @@ Database Schema:
         - patch_time INTEGER NOT NULL
         - audio_id INTEGER NOT NULL
         - FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id)
+    c. chroma_fingerprints table:
+        - hash_hex TEXT NOT NULL
+        - frame_index INTEGER NOT NULL
+        - audio_id INTEGER NOT NULL
+        - FOREIGN KEY (audio_id) REFERENCES audio_files(audio_id)
 
 Indices:
 - On maxima_pairing_fingerprints(hash_hex)
 - On spectral_patch_fingerprints(hash_hex)
+- On chroma_fingerprints(hash_hex)
 - On audio_files(file_path)
 """
 
 class SQLiteDB:
     def __init__(self, db_path='fingerprints.db', clear_db=False):
+        """Initializes the database connection and creates tables if they don't exist."""        
         self.db_path = db_path
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
@@ -39,6 +44,7 @@ class SQLiteDB:
         self._create_tables()
 
     def _create_tables(self):
+        """Creates the necessary database tables and indices if they don't already exist."""        
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS audio_files (
                 audio_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,9 +102,10 @@ class SQLiteDB:
         self.conn.commit()
 
     def _clear_db(self):
-        print(f"Clearing database '{self.db_path}'...")
+        """Drops existing database tables and recreates the schema."""
         self.cursor.execute('DROP TABLE IF EXISTS maxima_pairing_fingerprints')
         self.cursor.execute('DROP TABLE IF EXISTS spectral_patch_fingerprints')
+        self.cursor.execute('DROP TABLE IF EXISTS chroma_fingerprints')
         self.cursor.execute('DROP TABLE IF EXISTS audio_files')
         self.conn.commit()
         self._create_tables()
@@ -108,6 +115,7 @@ class SQLiteDB:
         print(f"Database now has {audio_count} audio file entries.")
     
     def fingerprint_already_registered(self, file_path, algorithm_name):
+        """Checks if fingerprints for a given file and algorithm already exist in the database."""
         if algorithm_name == "MaximaPairingAlgorithm":
             self.cursor.execute('''
                 SELECT 1 FROM maxima_pairing_fingerprints
@@ -136,6 +144,7 @@ class SQLiteDB:
         return self.cursor.fetchone() is not None
 
     def register_audio(self, file_path, audio_info, fingerprints, algorithm_name):
+        """Registers an audio file and its fingerprints in the database for a specific algorithm."""
         if not fingerprints:
             print(f"Warning: No fingerprints provided for {file_path} with algorithm {algorithm_name}. Skipping registration.")
             return None
@@ -153,7 +162,6 @@ class SQLiteDB:
                     (file_path, audio_info.get('filename', os.path.basename(file_path)))
                 )
                 audio_id = self.cursor.lastrowid
-                # print(f"Registered new file: {file_path} with audio_id {audio_id}")
             except sqlite3.Error as e:
                 print(f"Database error inserting audio file {file_path}: {e}")
                 self.conn.rollback()
@@ -171,7 +179,6 @@ class SQLiteDB:
                     fingerprint_data
                 )
                 self.conn.commit()
-                # print(f"Registered {len(fingerprint_data)} fingerprints in 'maxima_pairing_fingerprints' for audio_id {audio_id}.")
                 
                 return audio_id
             except sqlite3.Error as e:
@@ -190,8 +197,8 @@ class SQLiteDB:
                     fingerprint_data
                 )
                 self.conn.commit()
-                print(f"Registered {len(fingerprint_data)} fingerprints in 'spectral_patch_fingerprints' for audio_id {audio_id}.")
                 return audio_id
+            
             except sqlite3.Error as e:
                 print(f"Database error during registration (SpectralPatchAlgorithm) for {file_path}: {e}")
                 self.conn.rollback()
@@ -208,7 +215,7 @@ class SQLiteDB:
                     fingerprint_data
                 )
                 self.conn.commit()
-                print(f"Registered {len(fingerprint_data)} fingerprints in 'chroma_fingerprints' for audio_id {audio_id}.")
+                # print(f"Registered {len(fingerprint_data)} fingerprints in 'chroma_fingerprints' for audio_id {audio_id}.")
                 return audio_id
             except sqlite3.Error as e:
                 print(f"Database error during registration (ChromaAlgorithm) for {file_path}: {e}")
@@ -221,6 +228,7 @@ class SQLiteDB:
 
 
     def get_audio_info(self, audio_id):
+        """Retrieves the file path and filename for a given audio ID."""        
         self.cursor.execute('SELECT file_path, filename FROM audio_files WHERE audio_id = ?', (audio_id,))
         result = self.cursor.fetchone()
         if result:
@@ -229,9 +237,9 @@ class SQLiteDB:
         return None
 
     def close(self):
+        """Commits any pending changes and closes the database connection."""
         if self.conn:
             self.conn.commit()
             self.conn.close()
-            print("Database connection closed.")
         else:
             print("No database connection to close.")

@@ -7,6 +7,7 @@ class SpectralPatchAlgorithm(FingerprintAlgorithm):
     ALGORITHM_NAME = "SpectralPatchAlgorithm"
 
     def __init__(self, sr, n_fft, hop_length, patch_size, min_patch_energy, hash_algorithm):
+        """Initializes the SpectralPatchAlgorithm with specific parameters."""
         super().__init__(self.ALGORITHM_NAME)
         self.sr = sr                              # Target sample rate
         self.n_fft = n_fft                        # Window size for FFT
@@ -19,6 +20,7 @@ class SpectralPatchAlgorithm(FingerprintAlgorithm):
         #   `patch_size_freq` and `patch_size_time` could also be used.
 
     def generate_fingerprints(self, file_path, start_time=None, end_time=None):
+        """Generates fingerprints by hashing spectral patches of an audio file."""
         audio = self._load_and_preprocess_audio(file_path, self.sr, start_time, end_time)
         if audio is None:
             print(f"Error loading audio from {file_path}")

@@ -1,5 +1,3 @@
-import hashlib
-
 import librosa
 import numpy as np
 
@@ -10,14 +8,16 @@ class ChromaAlgorithm(FingerprintAlgorithm):
     ALGORITHM_NAME = "ChromaAlgorithm"
 
     def __init__(self, sr, n_fft, hop_length, threshold, hash_algorithm):
+        """Initializes the ChromaAlgorithm with specific parameters."""
         super().__init__(self.ALGORITHM_NAME)
         self.sr = sr                              # Target sample rate
         self.n_fft = n_fft                        # Window size for FFT
         self.hop_length = hop_length              # Number of samples between frames
         self.threshold = threshold                # Minimum chroma intensity for fingerprinting
-        self.hash_algorithm = hash_algorithm      # Hash algorithm (e.g. hashlib.sha1 or hashlib.sha256)
+        self.hash_algorithm = hash_algorithm      # Hash algorithm
 
     def generate_fingerprints(self, file_path, start_time=None, end_time=None):
+        """Generates fingerprints based on dominant chroma features in audio frames."""
         audio = self._load_and_preprocess_audio(file_path, self.sr, start_time, end_time)
         if audio is None:
             print(f"Error loading audio from {file_path}")
@@ -46,11 +46,11 @@ class ChromaAlgorithm(FingerprintAlgorithm):
         return fingerprints
 
     def find_match(self, query_fingerprints, db):
+        """Finds the best match for chroma-based query fingerprints in the database."""
         if not query_fingerprints:
             return None, "No query fingerprints provided for ChromaAlgorithm."
 
         unique_query_hashes = {fp[0] for fp in query_fingerprints}
-        # print(f"Querying {len(unique_query_hashes)} unique hashes for algorithm '{self.ALGORITHM_NAME}'")
 
         placeholders = ','.join('?' for _ in unique_query_hashes)
         sql = f'''
@@ -66,7 +66,6 @@ class ChromaAlgorithm(FingerprintAlgorithm):
             print(f"Database error during lookup for algorithm {self.ALGORITHM_NAME}: {e}")
             return None, "Database error during search."
 
-        # print(f"Retrieved {len(results)} hash matches from DB for algorithm '{self.ALGORITHM_NAME}'.")
 
         db_matches_by_hash = {}
         for db_hash, audio_id, db_frame_index in results:
