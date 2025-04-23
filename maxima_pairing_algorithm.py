@@ -1,7 +1,6 @@
 import sys
 
 import librosa
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.ndimage import maximum_filter
 
